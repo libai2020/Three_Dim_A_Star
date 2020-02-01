@@ -1,11 +1,12 @@
 function [x, y, theta, fitness] = SearchTrajectoryInXYTGraph(start_ind, goal_ind)
+global x_vec y_vec vehicle_geometrics_
+deg = linspace(0, 2 * pi, 100);
+x_vec = 0.5 * vehicle_geometrics_.vehicle_width .* cos(deg);
+y_vec = 0.5 * vehicle_geometrics_.vehicle_width .* sin(deg);
 global xyt_graph_search_ vehicle_TPBV_ environment_scale_
 [ind_vec, fitness] = SearchViaAStar(start_ind, goal_ind);
 x = environment_scale_.environment_x_min + (ind_vec(:,1)' - 1) .* xyt_graph_search_.resolution_x;
 y = environment_scale_.environment_y_min + (ind_vec(:,2)' - 1) .* xyt_graph_search_.resolution_y;
-dx = vehicle_TPBV_.x0 - x(1); dy = vehicle_TPBV_.y0 - y(1);
-x = x + dx; y = y + dy;
-x(end) = vehicle_TPBV_.xtf; y(1) = vehicle_TPBV_.y0;
 theta = zeros(1,length(x));
 theta(1) = vehicle_TPBV_.theta0;
 for ii = 2 : length(x)
@@ -35,7 +36,7 @@ grid_space_3D = cell(xyt_graph_search_.num_nodes_x, xyt_graph_search_.num_nodes_
 %  12-14    parent node's expansion vector
 init_node(1:3) = start_ind;
 init_node(5) = 0;
-init_node(6) = sum(abs(start_ind - goal_ind));
+init_node(6) = sum(abs(start_ind(1:2) - goal_ind(1:2))) + xyt_graph_search_.weight_for_time * abs(start_ind(3) - goal_ind(3));
 init_node(4) = xyt_graph_search_.multiplier_H_for_A_star * init_node(6);
 init_node(7) = 1;
 init_node(8) = 0;
@@ -98,7 +99,7 @@ while ((~isempty(openlist_))&&(iter <= xyt_graph_search_.max_iter)&&(~completene
             continue;
         end
         child_g = cur_g + expansion_length(ii,1) + 0.25 * sum(abs(expansion_pattern(ii,1:2) - cur_operation(1:2)));
-        child_h = sum(abs(child_node_ind - goal_ind));
+        child_h = sum(abs(child_node_ind(1:2) - goal_ind(1:2))) + xyt_graph_search_.weight_for_time * abs(child_node_ind(3) - goal_ind(3));
         child_f = child_g + xyt_graph_search_.multiplier_H_for_A_star * child_h;
         child_node_prepare = [child_node_ind, child_f, child_g, child_h, 1, 0, cur_ind, expansion_pattern(ii,:)];
         % If the child node has been explored ever before (but not closed yet)
@@ -148,54 +149,21 @@ end
 
 function is_valid = IsNodeValid(child_node_ind, cur_ind)
 global xyt_graph_search_ environment_scale_ obstacle_vertexes_ dynamic_obs
-x = environment_scale_.environment_x_min + xyt_graph_search_.resolution_x * (child_node_ind(1) - 1);
-y = environment_scale_.environment_y_min + xyt_graph_search_.resolution_y * (child_node_ind(2) - 1);
-dx = (child_node_ind(1) - cur_ind(1)) * xyt_graph_search_.resolution_x;
-dy = (child_node_ind(2) - cur_ind(2)) * xyt_graph_search_.resolution_y;
-theta = atan2(dy, dx);
+xc = environment_scale_.environment_x_min + xyt_graph_search_.resolution_x * (child_node_ind(1) - 1);
+yc = environment_scale_.environment_y_min + xyt_graph_search_.resolution_y * (child_node_ind(2) - 1);
+global x_vec y_vec
+x = xc + x_vec;
+y = yc + y_vec;
 is_valid = 0;
 for ii = 1 : size(obstacle_vertexes_,2)
-    if (IsVehicleCollidingWithMovingObstacle(x, y, theta, obstacle_vertexes_{1,ii}))
+    if (any(inpolygon(x, y, obstacle_vertexes_{1,ii}.x, obstacle_vertexes_{1,ii}.y)))
         return;
     end
 end
 for ii = 1 : size(dynamic_obs,2)
-    if (IsVehicleCollidingWithMovingObstacle(x, y, theta, dynamic_obs{child_node_ind(3),ii}))
+    if (any(inpolygon(x, y, dynamic_obs{child_node_ind(3),ii}.x, dynamic_obs{child_node_ind(3),ii}.y)))
         return;
     end
 end
 is_valid = 1;
-end
-
-function is_collided = IsVehicleCollidingWithMovingObstacle(x, y, theta, V)
-is_collided = 0;
-if (min(hypot(V.x - x, V.y - y)) > 10)
-    return;
-end
-Vcar = CreateVehiclePolygonFull(x, y, theta);
-if (any(inpolygon(Vcar.x, Vcar.y, V.x, V.y)))
-    is_collided = 1;
-    return;
-end
-if (any(inpolygon(V.x, V.y, Vcar.x, Vcar.y)))
-    is_collided = 1;
-    return;
-end
-end
-
-function Vcar = CreateVehiclePolygonFull(x, y, theta)
-global vehicle_geometrics_
-cos_theta = cos(theta);
-sin_theta = sin(theta);
-vehicle_half_width = vehicle_geometrics_.vehicle_width * 0.5;
-AX = x + (vehicle_geometrics_.vehicle_front_hang + vehicle_geometrics_.vehicle_wheelbase) * cos_theta - vehicle_half_width * sin_theta;
-BX = x + (vehicle_geometrics_.vehicle_front_hang + vehicle_geometrics_.vehicle_wheelbase) * cos_theta + vehicle_half_width * sin_theta;
-CX = x - vehicle_geometrics_.vehicle_rear_hang * cos_theta + vehicle_half_width * sin_theta;
-DX = x - vehicle_geometrics_.vehicle_rear_hang * cos_theta - vehicle_half_width * sin_theta;
-AY = y + (vehicle_geometrics_.vehicle_front_hang + vehicle_geometrics_.vehicle_wheelbase) * sin_theta + vehicle_half_width * cos_theta;
-BY = y + (vehicle_geometrics_.vehicle_front_hang + vehicle_geometrics_.vehicle_wheelbase) * sin_theta - vehicle_half_width * cos_theta;
-CY = y - vehicle_geometrics_.vehicle_rear_hang * sin_theta - vehicle_half_width * cos_theta;
-DY = y - vehicle_geometrics_.vehicle_rear_hang * sin_theta + vehicle_half_width * cos_theta;
-Vcar.x = [AX, BX, CX, DX, AX];
-Vcar.y = [AY, BY, CY, DY, AY];
 end
