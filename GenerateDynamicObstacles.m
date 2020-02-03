@@ -1,4 +1,4 @@
-%  MATLAB Source Codes for the book "Cooperative Dedcision and Planning for
+%  MATLAB Source Codes for the book "Cooperative Decision and Planning for
 %  Connected and Automated Vehicles" published by Mechanical Industry Press
 %  in 2020.
 % 《智能网联汽车协同决策与规划技术》书籍配套代码
