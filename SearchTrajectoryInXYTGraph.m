@@ -133,7 +133,7 @@ while ((~isempty(openlist_))&&(iter <= xyt_graph_search_.max_iter)&&(~completene
                 openlist_ = [openlist_; child_node_prepare];
                 grid_space_3D{child_node_ind(1), child_node_ind(2), child_node_ind(3)} = child_node_prepare;
                 if (~any(child_node_ind - goal_ind))
-                    cur_best_node = child_node_ind;
+                    cur_best_node = child_node_prepare;
                     fitness = child_g;
                     completeness_flag = 1;
                     break;
@@ -159,9 +159,6 @@ while (parent_ind(3) ~= -999)
 end
 if (~completeness_flag)
     fitness = 10000000 + cur_best_node(6);
-end
-if (length(ind_vec) ~= length(theta))
-    error '[SearchViaAStar] Error code 1'
 end
 end
 
